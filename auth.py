@@ -4,6 +4,7 @@
 # Build-in / Std
 import os, sys, time, platform, random
 import re, json, cookielib
+from getpass import getpass
 
 # requirements
 import requests, termcolor
@@ -66,8 +67,8 @@ class AccountError(Exception):
 
 
 def download_captcha():
-    url = "http://www.zhihu.com/captcha.gif"
-    r = requests.get(url, params={"r": random.random()} )
+    url = "https://www.zhihu.com/captcha.gif"
+    r = requests.get(url, params={"r": random.random(), "type": "login"}, verify=False)
     if int(r.status_code) != 200:
         raise NetworkError(u"验证码请求失败")
     image_name = u"verify." + r.headers['content-type'].split("/")[1]
@@ -82,15 +83,7 @@ def download_captcha():
     elif platform.system() == "Darwin":
         Logging.info(u"Command: open %s &" % image_name )
         os.system("open %s &" % image_name )
-    elif platform.system() == "SunOS":
-        os.system("open %s &" % image_name )
-    elif platform.system() == "FreeBSD":
-        os.system("open %s &" % image_name )
-    elif platform.system() == "Unix":
-        os.system("open %s &" % image_name )
-    elif platform.system() == "OpenBSD":
-        os.system("open %s &" % image_name )
-    elif platform.system() == "NetBSD":
+    elif platform.system() in ("SunOS", "FreeBSD", "Unix", "OpenBSD", "NetBSD"):
         os.system("open %s &" % image_name )
     elif platform.system() == "Windows":
         os.system("%s" % image_name )
@@ -103,7 +96,7 @@ def download_captcha():
 
 def search_xsrf():
     url = "http://www.zhihu.com/"
-    r = requests.get(url)
+    r = requests.get(url, verify=False)
     if int(r.status_code) != 200:
         raise NetworkError(u"验证码请求失败")
     results = re.compile(r"\<input\stype=\"hidden\"\sname=\"_xsrf\"\svalue=\"(\S+)\"", re.DOTALL).findall(r.text)
@@ -124,9 +117,12 @@ def build_form(account, password):
     return form
 
 def upload_form(form):
-    if "email" in form: url = "http://www.zhihu.com/login/email"
-    elif "phone_num" in form: url = "http://www.zhihu.com/login/phone_num"
-    else: raise ValueError(u"账号类型错误")
+    if "email" in form:
+        url = "https://www.zhihu.com/login/email"
+    elif "phone_num" in form:
+        url = "https://www.zhihu.com/login/phone_num"
+    else:
+        raise ValueError(u"账号类型错误")
 
     headers = {
         'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
@@ -137,7 +133,7 @@ def upload_form(form):
         'X-Requested-With': "XMLHttpRequest"
     }
 
-    r = requests.post(url, data=form, headers=headers)
+    r = requests.post(url, data=form, headers=headers, verify=False)
     if int(r.status_code) != 200:
         raise NetworkError(u"表单上传失败!")
 
@@ -158,7 +154,7 @@ def upload_form(form):
             return {"error": {"code": int(result['errcode']), "message": result['msg'], "data": result['data'] } }
         else:
             Logging.warn(u"表单上传出现未知错误: \n \t %s )" % ( str(result) ) )
-            return {"error": {"code": -1, "message": u"unknow error"} }
+            return {"error": {"code": -1, "message": u"unknown error"} }
     else:
         Logging.warn(u"无法解析服务器的响应内容: \n \t %s " % r.text )
         return {"error": {"code": -2, "message": u"parse error"} }
@@ -167,7 +163,7 @@ def upload_form(form):
 def islogin():
     # check session
     url = "https://www.zhihu.com/settings/profile"
-    r = requests.get(url, allow_redirects=False)
+    r = requests.get(url, allow_redirects=False, verify=False)
     status_code = int(r.status_code)
     if status_code == 301 or status_code == 302:
         # 未登录
@@ -212,15 +208,14 @@ def login(account=None, password=None):
     if account == None:
         sys.stdout.write(u"请输入登录账号: ")
         account  = raw_input()
-        sys.stdout.write(u"请输入登录密码: ")
-        password = raw_input()
+        password = getpass("请输入登录密码: ")
 
     form_data = build_form(account, password)
     """
         result:
             {"result": True}
-            {"error": {"code": 19855555, "message": "unknow.", "data": "data" } }
-            {"error": {"code": -1, "message": u"unknow error"} }
+            {"error": {"code": 19855555, "message": "unknown.", "data": "data" } }
+            {"error": {"code": -1, "message": u"unknown error"} }
     """
     result = upload_form(form_data)
     if "error" in result:
@@ -228,8 +223,12 @@ def login(account=None, password=None):
             # 验证码错误
             Logging.error(u"验证码输入错误，请准备重新输入。" )
             return login()
+        elif result["error"]['code'] == 100005:
+            # 密码错误
+            Logging.error(u"密码输入错误，请准备重新输入。" )
+            return login()
         else:
-            Logging.warn(u"unknow error." )
+            Logging.warn(u"unknown error." )
             return False
     elif "result" in result and result['result'] == True:
         # 登录成功
