@@ -92,6 +92,193 @@ if islogin() != True:
 reload(sys)
 sys.setdefaultencoding('utf8')
 
+class Post:
+    url = None
+    meta = None
+    slug = None
+
+    def __init__(self, url):
+
+        if not re.compile(r"(http|https)://zhuanlan.zhihu.com/p/\d{8}").match(url):
+            raise ValueError("\"" + url + "\"" + " : it isn't a question url.")
+        else:
+            self.url = url
+            self.slug = re.compile(r"(http|https)://zhuanlan.zhihu.com/p/(\d{8})").match(url).group(2)
+
+    def parser(self):
+        headers = {
+            'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+            'Host': "zhuanlan.zhihu.com",
+            'Accept': "application/json, text/plain, */*"
+        }
+        r = requests.get('https://zhuanlan.zhihu.com/api/posts/' + self.slug, headers=headers, verify=False)
+        self.meta = r.json()
+
+    def get_title(self):
+        if hasattr(self, "title"):
+            if platform.system() == 'Windows':
+                title = self.title.decode('utf-8').encode('gbk')
+                return title
+            else:
+                return self.title
+        else:
+            if self.meta == None:
+                self.parser()
+            meta = self.meta
+            title = meta['title']
+            self.title = title
+            if platform.system() == 'Windows':
+                title = title.decode('utf-8').encode('gbk')
+                return title
+            else:
+                return title
+
+    def get_content(self):
+        if self.meta == None:
+            self.parser()
+        meta = self.meta
+        content = meta['content']
+        if platform.system() == 'Windows':
+            content = content.decode('utf-8').encode('gbk')
+            return content
+        else:
+            return content
+    
+    def get_author(self):
+        if hasattr(self, "author"):
+            return self.author
+        else:
+            if self.meta == None:
+                self.parser()
+            meta = self.meta
+            author_tag = meta['author']
+            author = User(author_tag['profileUrl'],author_tag['slug'])
+            return author
+
+    def get_column(self):
+        if self.meta == None:
+            self.parser()
+        meta = self.meta
+        column_url = 'https://zhuanlan.zhihu.com/' + meta['column']['slug']
+        return Column(column_url, meta['column']['slug'])
+
+    def get_likes(self):
+        if self.meta == None:
+            self.parser()
+        meta = self.meta
+        return int(meta["likesCount"])
+
+    def get_topics(self):
+        if self.meta == None:
+            self.parser()
+        meta = self.meta
+        topic_list = []
+        for topic in meta['topics']:
+            topic_list.append(topic['name'])
+        return topic_list
+      
+class Column:
+    url = None
+    meta = None
+
+    def __init__(self, url, slug=None):
+
+        if not re.compile(r"(http|https)://zhuanlan.zhihu.com/([0-9a-zA-Z]+)").match(url):
+            raise ValueError("\"" + url + "\"" + " : it isn't a question url.")
+        else:
+            self.url = url
+            if slug == None:
+                self.slug = re.compile(r"(http|https)://zhuanlan.zhihu.com/([0-9a-zA-Z]+)").match(url).group(2)
+            else:
+                self.slug = slug
+
+    def parser(self):
+        headers = {
+            'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+            'Host': "zhuanlan.zhihu.com",
+            'Accept': "application/json, text/plain, */*"
+        }
+        r = requests.get('https://zhuanlan.zhihu.com/api/columns/' + self.slug, headers=headers, verify=False)
+        self.meta = r.json()
+
+    def get_title(self):
+        if hasattr(self,"title"):
+            if platform.system() == 'Windows':
+                title =  self.title.decode('utf-8').encode('gbk')
+                return title
+            else:
+                return self.title
+        else:
+            if self.meta == None:
+                self.parser()
+            meta = self.meta
+            title = meta['name']
+            self.title = title
+            if platform.system() == 'Windows':
+                title = title.decode('utf-8').encode('gbk')
+                return title
+            else:
+                return title
+
+    def get_description(self):
+        if self.meta == None:
+            self.parser()
+        meta = self.meta
+        description = meta['description']
+        if platform.system() == 'Windows':
+            description = description.decode('utf-8').encode('gbk')
+            return description
+        else:
+            return description
+
+    def get_followers_num(self):
+        if self.meta == None:
+            self.parser()
+        meta = self.meta
+        followers_num = int(meta['followersCount'])
+        return followers_num
+
+    def get_posts_num(self):
+        if self.meta == None:
+            self.parser()
+        meta = self.meta
+        posts_num = int(meta['postsCount'])
+        return posts_num
+
+    def get_creator(self):
+        if hasattr(self, "creator"):
+            return self.creator
+        else:
+            if self.meta == None:
+                self.parser()
+            meta = self.meta
+            creator_tag = meta['creator']
+            creator = User(creator_tag['profileUrl'],creator_tag['slug'])
+            return creator
+
+    def get_all_posts(self):
+        posts_num = self.get_posts_num()
+        if posts_num == 0:
+            print "No posts."
+            return
+            yield
+        else:
+            for i in xrange((posts_num - 1) / 20 + 1):
+                parm = {'limit': 20, 'offset': 20*i}
+                url = 'https://zhuanlan.zhihu.com/api/columns/' + self.slug + '/posts'
+                headers = {
+                    'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+                    'Host': "www.zhihu.com",
+                    'Origin': "http://www.zhihu.com",
+                    'Pragma': "no-cache",
+                    'Referer': "http://www.zhihu.com/"
+                }
+                r = requests.get(url, params=parm, headers=headers, verify=False)
+                posts_list = r.json()
+                for p in posts_list:
+                    post_url = 'https://zhuanlan.zhihu.com/p/' + str(p['slug'])
+                    yield Post(post_url)
+
 class Question:
     url = None
     soup = None
@@ -106,8 +293,15 @@ class Question:
         if title != None: self.title = title
 
     def parser(self):
-        r = requests.get(self.url)
-        self.soup = BeautifulSoup(r.content)
+        headers = {
+            'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+            'Host': "www.zhihu.com",
+            'Origin': "http://www.zhihu.com",
+            'Pragma': "no-cache",
+            'Referer': "http://www.zhihu.com/"
+        }
+        r = requests.get(self.url,headers=headers, verify=False)
+        self.soup = BeautifulSoup(r.content, "lxml")
 
     def get_title(self):
         if hasattr(self, "title"):
@@ -177,12 +371,12 @@ class Question:
         else:
             error_answer_count = 0
             my_answer_count = 0
-            for i in xrange((answers_num - 1) / 50 + 1):
+            for i in xrange((answers_num - 1) / 20 + 1):
                 if i == 0:
-                    for j in xrange(min(answers_num, 50)):
+                    for j in xrange(min(answers_num, 20)):
                         if self.soup == None:
                             self.parser()
-                        soup = BeautifulSoup(self.soup.encode("utf-8"))
+                        soup = BeautifulSoup(self.soup.encode("utf-8"), "lxml")
 
                         is_my_answer = False
                         if soup.find_all("div", class_="zm-item-answer")[j].find("span", class_="count") == None:
@@ -234,9 +428,9 @@ class Question:
                 else:
                     post_url = "http://www.zhihu.com/node/QuestionAnswerListV2"
                     _xsrf = self.soup.find("input", attrs={'name': '_xsrf'})["value"]
-                    offset = i * 50
+                    offset = i * 20
                     params = json.dumps(
-                        {"url_token": int(self.url[-8:-1] + self.url[-1]), "pagesize": 50, "offset": offset})
+                        {"url_token": int(self.url[-8:-1] + self.url[-1]), "pagesize": 20, "offset": offset})
                     data = {
                         '_xsrf': _xsrf,
                         'method': "next",
@@ -247,13 +441,13 @@ class Question:
                         'Host': "www.zhihu.com",
                         'Referer': self.url
                     }
-                    r = requests.post(post_url, data=data, headers=header)
+                    r = requests.post(post_url, data=data, headers=header, verify=False)
 
                     answer_list = r.json()["msg"]
-                    for j in xrange(min(answers_num - i * 50, 50)):
-                        soup = BeautifulSoup(self.soup.encode("utf-8"))
+                    for j in xrange(min(answers_num - i * 20, 20)):
+                        soup = BeautifulSoup(self.soup.encode("utf-8"), "lxml")
 
-                        answer_soup = BeautifulSoup(answer_list[j])
+                        answer_soup = BeautifulSoup(answer_list[j], "lxml")
 
                         if answer_soup.find("div", class_="zm-editable-content clearfix") == None:
                             continue
@@ -336,8 +530,15 @@ class User:
                 self.user_id = user_id
 
     def parser(self):
-        r = requests.get(self.user_url)
-        soup = BeautifulSoup(r.content)
+        headers = {
+            'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+            'Host': "www.zhihu.com",
+            'Origin': "http://www.zhihu.com",
+            'Pragma': "no-cache",
+            'Referer': "http://www.zhihu.com/"
+        }
+        r = requests.get(self.user_url, headers=headers, verify=False)
+        soup = BeautifulSoup(r.content, "lxml")
         self.soup = soup
 
     def get_user_id(self):
@@ -364,6 +565,32 @@ class User:
                     return user_id.decode('utf-8').encode('gbk')
                 else:
                     return user_id
+
+    def get_head_img_url(self, scale=4):
+        """
+            By liuwons (https://github.com/liuwons)
+            增加获取知乎识用户的头像url
+            scale对应的头像尺寸:
+                1 - 25×25
+                3 - 75×75
+                4 - 100×100
+                6 - 150×150
+                10 - 250×250
+        """
+        scale_list = [1, 3, 4, 6, 10]
+        scale_name = '0s0ml0t000b'
+        if self.user_url == None:
+            print "I'm anonymous user."
+            return None
+        else:
+            if scale not in scale_list:
+                print 'Illegal scale.'
+                return None
+            if self.soup == None:
+                self.parser()
+            soup = self.soup
+            url = soup.find("img", class_="Avatar Avatar--l")["src"]
+            return url[:-5] + scale_name[scale] + url[-4:]
 
     def get_data_id(self):
         """
@@ -426,6 +653,22 @@ class User:
             followers_num = int(soup.find("div", class_="zm-profile-side-following zg-clear") \
                                 .find_all("a")[1].strong.string)
             return followers_num
+
+    def get_topics_num(self):
+        if self.user_url == None:
+            print "I'm anonymous user."
+            return 0
+        else:
+            if self.soup == None:
+                self.parser()
+            soup = self.soup
+            topics_num = soup.find_all("div", class_="zm-profile-side-section-title")[1].strong.string.encode("utf-8")
+            I=''
+            for i in topics_num:
+                if i.isdigit():
+                    I=I+i
+            topics_num=int(I)
+            return topics_num       
 
     def get_agree_num(self):
         if self.user_url == None:
@@ -494,9 +737,16 @@ class User:
                 yield
             else:
                 followee_url = self.user_url + "/followees"
-                r = requests.get(followee_url)
+                headers = {
+                    'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+                    'Host': "www.zhihu.com",
+                    'Origin': "http://www.zhihu.com",
+                    'Pragma': "no-cache",
+                    'Referer': "http://www.zhihu.com/"
+                }
+                r = requests.get(followee_url, headers=headers, verify=False)
 
-                soup = BeautifulSoup(r.content)
+                soup = BeautifulSoup(r.content, "lxml")
                 for i in xrange((followees_num - 1) / 20 + 1):
                     if i == 0:
                         user_url_list = soup.find_all("h2", class_="zm-list-content-title")
@@ -519,11 +769,11 @@ class User:
                             'Referer': followee_url
                         }
 
-                        r_post = requests.post(post_url, data=data, headers=header)
+                        r_post = requests.post(post_url, data=data, headers=header, verify=False)
 
                         followee_list = r_post.json()["msg"]
                         for j in xrange(min(followees_num - i * 20, 20)):
-                            followee_soup = BeautifulSoup(followee_list[j])
+                            followee_soup = BeautifulSoup(followee_list[j], "lxml")
                             user_link = followee_soup.find("h2", class_="zm-list-content-title").a
                             yield User(user_link["href"], user_link.string.encode("utf-8"))
 
@@ -539,9 +789,16 @@ class User:
                 yield
             else:
                 follower_url = self.user_url + "/followers"
-                r = requests.get(follower_url)
+                headers = {
+                    'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+                    'Host': "www.zhihu.com",
+                    'Origin': "http://www.zhihu.com",
+                    'Pragma': "no-cache",
+                    'Referer': "http://www.zhihu.com/"
+                }
+                r = requests.get(follower_url, headers=headers, verify=False)
 
-                soup = BeautifulSoup(r.content)
+                soup = BeautifulSoup(r.content, "lxml")
                 for i in xrange((followers_num - 1) / 20 + 1):
                     if i == 0:
                         user_url_list = soup.find_all("h2", class_="zm-list-content-title")
@@ -563,13 +820,62 @@ class User:
                             'Host': "www.zhihu.com",
                             'Referer': follower_url
                         }
-                        r_post = requests.post(post_url, data=data, headers=header)
+                        r_post = requests.post(post_url, data=data, headers=header, verify=False)
 
                         follower_list = r_post.json()["msg"]
                         for j in xrange(min(followers_num - i * 20, 20)):
-                            follower_soup = BeautifulSoup(follower_list[j])
+                            follower_soup = BeautifulSoup(follower_list[j], "lxml")
                             user_link = follower_soup.find("h2", class_="zm-list-content-title").a
                             yield User(user_link["href"], user_link.string.encode("utf-8"))
+
+    def get_topics(self):
+        if self.user_url == None:
+            print "I'm anonymous user."
+            return
+            yield
+        else:
+            topics_num = self.get_topics_num()
+            # print topics_num
+            if topics_num == 0:
+                return
+                yield
+            else:
+                topics_url = self.user_url + "/topics"
+                headers = {
+                    'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+                    'Host': "www.zhihu.com",
+                    'Origin': "http://www.zhihu.com",
+                    'Pragma': "no-cache",
+                    'Referer': "http://www.zhihu.com/"
+                }
+                r = requests.get(topics_url, headers=headers, verify=False)
+                soup = BeautifulSoup(r.content, "lxml")
+                for i in xrange((topics_num - 1) / 20 + 1):
+                    if i == 0:
+                        topic_list = soup.find_all("div", class_="zm-profile-section-item zg-clear")
+                        for j in xrange(min(topics_num, 20)):
+                            yield topic_list[j].find("strong").string.encode("utf-8")
+                    else:
+                        post_url = topics_url
+                        _xsrf = soup.find("input", attrs={'name': '_xsrf'})["value"]
+                        offset = i * 20
+                        data = {
+                            '_xsrf': _xsrf,
+                            'offset': offset,
+                            'start': 0
+                        }
+                        header = {
+                            'User-Agent': "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:34.0) Gecko/20100101 Firefox/34.0",
+                            'Host': "www.zhihu.com",
+                            'Referer': topics_url
+                        }
+                        r_post = requests.post(post_url, data=data, headers=header, verify=False)
+
+                        topic_data = r_post.json()["msg"][1]
+                        topic_soup = BeautifulSoup(topic_data, "lxml")
+                        topic_list = topic_soup.find_all("div", class_="zm-profile-section-item zg-clear")
+                        for j in xrange(min(topics_num - i * 20, 20)):
+                            yield topic_list[j].find("strong").string.encode("utf-8")
 
     def get_asks(self):
         """
@@ -589,9 +895,16 @@ class User:
             else:
                 for i in xrange((asks_num - 1) / 20 + 1):
                     ask_url = self.user_url + "/asks?page=" + str(i + 1)
-                    r = requests.get(ask_url)
+                    headers = {
+                        'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+                        'Host': "www.zhihu.com",
+                        'Origin': "http://www.zhihu.com",
+                        'Pragma': "no-cache",
+                        'Referer': "http://www.zhihu.com/"
+                    }
+                    r = requests.get(ask_url, headers=headers, verify=False)
 
-                    soup = BeautifulSoup(r.content)
+                    soup = BeautifulSoup(r.content, "lxml")
                     for question in soup.find_all("a", class_="question_link"):
                         url = "http://www.zhihu.com" + question["href"]
                         title = question.string.encode("utf-8")
@@ -610,8 +923,15 @@ class User:
             else:
                 for i in xrange((answers_num - 1) / 20 + 1):
                     answer_url = self.user_url + "/answers?page=" + str(i + 1)
-                    r = requests.get(answer_url)
-                    soup = BeautifulSoup(r.content)
+                    headers = {
+                        'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+                        'Host': "www.zhihu.com",
+                        'Origin': "http://www.zhihu.com",
+                        'Pragma': "no-cache",
+                        'Referer': "http://www.zhihu.com/"
+                    }
+                    r = requests.get(answer_url, headers=headers, verify=False)
+                    soup = BeautifulSoup(r.content, "lxml")
                     for answer in soup.find_all("a", class_="question_link"):
                         question_url = "http://www.zhihu.com" + answer["href"][0:18]
                         question_title = answer.string.encode("utf-8")
@@ -631,10 +951,16 @@ class User:
             else:
                 for i in xrange((collections_num - 1) / 20 + 1):
                     collection_url = self.user_url + "/collections?page=" + str(i + 1)
+                    headers = {
+                        'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+                        'Host': "www.zhihu.com",
+                        'Origin': "http://www.zhihu.com",
+                        'Pragma': "no-cache",
+                        'Referer': "http://www.zhihu.com/"
+                    }
+                    r = requests.get(collection_url, headers=headers, verify=False)
 
-                    r = requests.get(collection_url)
-
-                    soup = BeautifulSoup(r.content)
+                    soup = BeautifulSoup(r.content, "lxml")
                     for collection in soup.find_all("div", class_="zm-profile-section-item zg-clear"):
                         url = "http://www.zhihu.com" + \
                               collection.find("a", class_="zm-profile-fav-item-title")["href"]
@@ -649,8 +975,15 @@ class User:
             return
             yield
         else:
-            r = requests.get(self.user_url)
-            soup = BeautifulSoup(r.content)
+            headers = {
+                'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+                'Host': "www.zhihu.com",
+                'Origin': "http://www.zhihu.com",
+                'Pragma': "no-cache",
+                'Referer': "http://www.zhihu.com/"
+            }
+            r = requests.get(self.user_url, headers=headers, verify=False)
+            soup = BeautifulSoup(r.content, "lxml")
             # Handle the first liked item
             first_item = soup.find("div", attrs={'class':'zm-profile-section-item zm-item clearfix'})
             first_item = first_item.find("div", attrs={'class':'zm-profile-section-main zm-profile-section-activity-main zm-profile-activity-page-item-main'})
@@ -670,7 +1003,7 @@ class User:
                 'Referer': self.user_url,
                 'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/45.0.2454.101 Safari/537.36",
             }
-            r = requests.post(post_url, data=data, headers=header)
+            r = requests.post(post_url, data=data, headers=header, verify=False)
             response_size = r.json()["msg"][0]
             response_html = r.json()["msg"][1]
             while response_size > 0:
@@ -690,7 +1023,7 @@ class User:
                 'start': latest_data_time,
                 '_xsrf': _xsrf,
                 }
-                r = requests.post(post_url, data=data, headers=header)
+                r = requests.post(post_url, data=data, headers=header, verify=False)
                 response_size = r.json()["msg"][0]
                 response_html = r.json()["msg"][1]
             return
@@ -716,8 +1049,15 @@ class Answer:
             self.content = content
 
     def parser(self):
-        r = requests.get(self.answer_url)
-        soup = BeautifulSoup(r.content)
+        headers = {
+            'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+            'Host': "www.zhihu.com",
+            'Origin': "http://www.zhihu.com",
+            'Pragma': "no-cache",
+            'Referer': "http://www.zhihu.com/"
+        }
+        r = requests.get(self.answer_url, headers=headers, verify=False)
+        soup = BeautifulSoup(r.content, "lxml")
         self.soup = soup
 
     def get_question(self):
@@ -772,7 +1112,7 @@ class Answer:
         else:
             if self.soup == None:
                 self.parser()
-            soup = BeautifulSoup(self.soup.encode("utf-8"))
+            soup = BeautifulSoup(self.soup.encode("utf-8"), "lxml")
             answer = soup.find("div", class_="zm-editable-content clearfix")
             soup.body.extract()
             soup.head.insert_after(soup.new_tag("body", **{'class': 'zhi'}))
@@ -961,8 +1301,15 @@ class Answer:
         #     create_session()
         # s = session
         # r = s.get(request_url, params={"params": "{\"answer_id\":\"%d\"}" % int(data_aid)})
-        r = requests.get(request_url, params={"params": "{\"answer_id\":\"%d\"}" % int(data_aid)})
-        soup = BeautifulSoup(r.content)
+        headers = {
+            'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+            'Host': "www.zhihu.com",
+            'Origin': "http://www.zhihu.com",
+            'Pragma': "no-cache",
+            'Referer': "http://www.zhihu.com/"
+        }
+        r = requests.get(request_url, params={"params": "{\"answer_id\":\"%d\"}" % int(data_aid)}, headers=headers, verify=False)
+        soup = BeautifulSoup(r.content, "lxml")
         voters_info = soup.find_all("span")[1:-1]
         if len(voters_info) == 0:
             return
@@ -996,8 +1343,15 @@ class Collection:
             if creator != None:
                 self.creator = creator
     def parser(self):
-        r = requests.get(self.url)
-        soup = BeautifulSoup(r.content)
+        headers = {
+            'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+            'Host': "www.zhihu.com",
+            'Origin': "http://www.zhihu.com",
+            'Pragma': "no-cache",
+            'Referer': "http://www.zhihu.com/"
+        }
+        r = requests.get(self.url, headers=headers, verify=False)
+        soup = BeautifulSoup(r.content, "lxml")
         self.soup = soup
 
     def get_name(self):
@@ -1061,8 +1415,15 @@ class Collection:
                     yield Answer(answer_url, question, author)
             i = 2
             while True:
-                r = requests.get(self.url + "?page=" + str(i))
-                answer_soup = BeautifulSoup(r.content)
+                headers = {
+                    'User-Agent': "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36",
+                    'Host': "www.zhihu.com",
+                    'Origin': "http://www.zhihu.com",
+                    'Pragma': "no-cache",
+                    'Referer': "http://www.zhihu.com/"
+                }
+                r = requests.get(self.url + "?page=" + str(i), headers=headers, verify=False)
+                answer_soup = BeautifulSoup(r.content, "lxml")
                 answer_list = answer_soup.find_all("div", class_="zm-item")
                 if len(answer_list) == 0:
                     break
